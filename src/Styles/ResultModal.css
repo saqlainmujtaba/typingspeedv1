@@ -1,0 +1,48 @@
+/* src/Styles/ResultModal.css */
+.result-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.result-content {
+  background: #fff;
+  padding: 30px 40px;
+  border-radius: 12px;
+  text-align: center;
+  max-width: 400px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.result-content h2 {
+  margin-bottom: 20px;
+  color: #007acc;
+}
+
+.result-content p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.result-content button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  background-color: #007acc;
+  color: white;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.result-content button:hover {
+  background-color: #005f99;
+}

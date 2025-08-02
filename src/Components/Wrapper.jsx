@@ -1,53 +1,12 @@
-// import React from 'react'
-// import "../Styles/styles.css"
-
-// const Wrapper = () => {
-//   return (
-//     <>
-//      <div class="wrapper">
-//         <input type="text" class="input-field"/>
-//         <div class="content-box">
-//             <div class="typing-text">
-//                 <p id="paragraph"></p>
-//             </div>
-//             <div class="content">
-//                 <ul class="result-details">
-//                     <li class="time">
-//                         <p>
-//                             Time Left:
-//                         </p>
-//                         <span><b>60</b>s</span>
-//                     </li>
-//                     <li class="mistake">
-//                         <p>
-//                             Mistakes:
-//                         </p>
-//                         <span>0</span>
-//                     </li>
-//                     <li class="wpm">
-//                         <p>
-//                             WPM:
-//                         </p>
-//                         <span>0</span>
-//                     </li>
-//                     <li class="cpm">
-//                         <p>
-//                             CPM:
-//                         </p>
-//                         <span>0</span>
-//                     </li>
-//                 </ul>
-//                 <button>Try Again</button>
-//             </div>
-//         </div>
-//     </div></>
-//   )
-// }
-
-// export default Wrapper
-
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "../Styles/styles.css";
+import ResultModal from "./ResultModel";
+import TimerControls from "./TimerControls";
+
+import errorSound from "../assets/sounds/error-sound.ogg";
+import keyPressSound from "../assets/sounds/mechanical_keyboard.wav";
+import startSound from "../assets/sounds/start-sound.wav";
+import completeSound from "../assets/sounds/success_bell.wav";
 
 const paragraphs = [
   "The Prophet Muhammad (PBUH) was born in the city of Mecca in the year five hundred seventy CE. Orphaned at a young age, he grew up under the care of his uncle. Known for his honesty and integrity, he earned the title Al-Amin, meaning 'the trustworthy.' At the age of forty, he received the first revelation from Allah through the Angel Jibreel (Gabriel), marking the beginning of Islam.",
@@ -97,8 +56,29 @@ const Wrapper = () => {
   const [wpm, setWpm] = useState(0);
   const [cpm, setCpm] = useState(0);
 
+  const [showResult, setShowResult] = useState(false);
+  const [maxTime, setMaxTime] = useState(60); // Required by TimerControls
+
+  // sounds
+
+  const keyAudio = useRef(new Audio(keyPressSound));
+  const startAudio = useRef(new Audio(startSound));
+  const completeAudio = useRef(new Audio(completeSound));
+  const errorAudio = useRef(new Audio(errorSound));
+
+  // Play when test starts
+  const startTest = () => {
+    startAudio.current.play();
+    // other start logic...
+  };
+    // Play when test completes
+  const finishTest = () => {
+    completeAudio.current.play();
+    // other complete logic...
+  };
   const inpRef = useRef(null);
   const timerRef = useRef(null);
+  const inactivityTimerRef = useRef(null);
 
   //   useEffect(() => {
   //     loadParagraph();
@@ -107,12 +87,36 @@ const Wrapper = () => {
     loadParagraph();
     if (inpRef.current) inpRef.current.focus(); // focus on load
   }, []);
-
   useEffect(() => {
-    const handleKeydown = () => inpRef.current?.focus(); // focus on keypress
+    const handleKeydown = () => {
+      // Only refocus the typing input if the current focused element is NOT an input
+      const tag = document.activeElement?.tagName.toLowerCase();
+      if (tag !== "input" && inpRef.current) {
+        inpRef.current.focus();
+      }
+    };
+
     document.addEventListener("keydown", handleKeydown);
     return () => document.removeEventListener("keydown", handleKeydown);
   }, []);
+
+//  load the next paragraph
+useEffect(() => {
+  if (charIndex === paragraph.length && paragraph.length > 0) {
+    // Paragraph completed
+
+    // Play finish sound
+    finishTest();
+
+    // Small delay before loading next paragraph
+    setTimeout(() => {
+      loadParagraph();
+      if (inpRef.current) inpRef.current.focus();
+    }, 1000); // delay for user to realize it's complete
+  }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [charIndex, paragraph]);
+
 
   const loadParagraph = () => {
     const ranIndex = Math.floor(Math.random() * paragraphs.length);
@@ -120,10 +124,12 @@ const Wrapper = () => {
     setParagraph(chars);
     setCharIndex(0);
     setMistakes(0);
-    setTimeLeft(60);
     setIsTyping(false);
     setWpm(0);
     setCpm(0);
+    setShowResult(false); // ✅ Reset modal visibility
+    setTimeLeft(maxTime); // ✅ Use dynamic time, not hardcoded 60
+
     clearInterval(timerRef.current);
     if (inpRef.current) inpRef.current.value = "";
   };
@@ -132,12 +138,26 @@ const Wrapper = () => {
     const characters = paragraph;
     const typedChar = e.target.value.charAt(charIndex);
 
+    // Reset inactivity timer
+    clearTimeout(inactivityTimerRef.current);
+    inactivityTimerRef.current = setTimeout(() => {
+      clearInterval(timerRef.current); // Stop countdown
+      setIsTyping(false); // Mark user as inactive
+    }, 5000); // 5 seconds of inactivity
+
     if (charIndex < characters.length && timeLeft > 0) {
       if (!isTyping) {
         setIsTyping(true);
+          startTest(); // ✅ Play start sound
         timerRef.current = setInterval(() => {
           setTimeLeft((prev) => {
-            if (prev <= 1) clearInterval(timerRef.current);
+            if (prev <= 1) {
+              clearInterval(timerRef.current);
+              clearTimeout(inactivityTimerRef.current); // Also clear inactivity timer
+              setShowResult(true);
+              finishTest();
+              return 0;
+            }
             return prev - 1;
           });
         }, 1000);
@@ -147,14 +167,18 @@ const Wrapper = () => {
       if (typedChar) {
         if (typedChar === currentChar) {
           setCharIndex((prev) => prev + 1);
+          // play audio
+          keyAudio.current.currentTime = 0; // rewind to allow fast typing
+          keyAudio.current.play();
         } else {
           setMistakes((prev) => prev + 1);
           setCharIndex((prev) => prev + 1);
+          errorAudio.current.currentTime = 0; // rewind to allow fast typing
+          errorAudio.current.play();
         }
 
-        // Calculate WPM & CPM
         const wpmCalc = Math.round(
-          ((charIndex + 1 - mistakes) / 5 / (60 - timeLeft)) * 60
+          ((charIndex + 1 - mistakes) / 5 / (maxTime - timeLeft)) * 60
         );
         setWpm(wpmCalc > 0 && isFinite(wpmCalc) ? wpmCalc : 0);
         setCpm(charIndex + 1 - mistakes);
@@ -163,6 +187,7 @@ const Wrapper = () => {
       }
     } else {
       clearInterval(timerRef.current);
+      clearTimeout(inactivityTimerRef.current);
     }
   };
 
@@ -173,6 +198,11 @@ const Wrapper = () => {
         ref={inpRef}
         className="input-field"
         onInput={handleTyping}
+      />
+      <TimerControls
+        setMaxTime={setMaxTime}
+        setTimeLeft={setTimeLeft}
+        maxTime={maxTime}
       />
 
       <div className="content-box">
@@ -221,6 +251,15 @@ const Wrapper = () => {
           <button onClick={loadParagraph}>Try Again</button>
         </div>
       </div>
+      {/* Result modal shown when test ends */}
+      {showResult && (
+        <ResultModal
+          wpm={wpm}
+          cpm={cpm}
+          mistakes={mistakes}
+          onRetry={loadParagraph}
+        />
+      )}
     </div>
   );
 };
